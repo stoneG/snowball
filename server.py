@@ -168,8 +168,7 @@ class EventManager:
 
 
 class ConnectEvent:
-    def __init__(self):
-        pass
+    pass
 
 
 class TickEvent:
@@ -178,8 +177,11 @@ class TickEvent:
 
 
 class QuitEvent:
-    def __init__(self):
-        pass
+    pass
+
+
+class ResetEvent:
+    pass
 
 
 class Model:
@@ -189,6 +191,10 @@ class Model:
 
     def notify(self, event):
         if isinstance(event, TickEvent):
+
+            if not snowballs:
+                self.event_manager(ResetEvent())
+                return
 
             # Choose wind
             wind.change_speed(random.choice(X_WIND), 0)
@@ -208,7 +214,8 @@ class Model:
                     del snowballs[index]
                     self.event_manager.post(TickEvent(game_over=True))
                     return
-                #sb.nature_move(wind.xSpeed, gravity.ySpeed)
+                # Currently not applying nature effects to snowballs
+                # sb.nature_move(wind.xSpeed, gravity.ySpeed)
                 for client in clients.values():
                     if client[1] == sb.color:
                         sb.control(client[0])
@@ -245,8 +252,8 @@ class PrintView:
             if event.game_over:
                 print 'Game Over'
 
-        if isinstance(event, QuitEvent):
-            print 'Quit Event'
+        if isinstance(event, ResetEvent):
+            print 'Reset Event'
 
 class StateController:
     def __init__(self, eventManager):
@@ -312,7 +319,6 @@ class StateController:
         flakes = Snowstorm(500, SNOW_X_MIN, SNOW_X_MAX, SNOW_Y_MIN, SNOW_Y_MAX)
         snowflakes = flakes.attributes('Snowflakes')
 
-
         while self.keep_going:
             # TickEvent starts events for the general game
             lt = current_time()
@@ -336,8 +342,17 @@ class StateController:
             #abc = current_time()
             #print 'tick event over in %d' % (abc - lt)
 
+        addr = json.dumps('Reset')
+        for addr in clients:
+            s.sendto(msg, addr)
+        self.event_manager.post(ResetEvent())
+
     def notify(self, event):
-        if isinstance(event, QuitEvent):
+        if isinstance(event, ResetEvent):
+            self.master = None
+            self.connect = True
+            self.keep_going = True
+        elif isinstance(event, QuitEvent):
             self.keep_going = False
         elif isinstance(event, TickEvent):
             self.connect = False
@@ -550,7 +565,7 @@ class Snowstorm:
 
     def attributes(self, typeOfSnow, playerRadius=None,
                    playerColors=None):
-        """Return list of Snowflakes with given attributes."""
+        """Return list of snowflakes with given attributes."""
 
         attrs = []
         if typeOfSnow == 'Snowflakes':
