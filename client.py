@@ -19,12 +19,16 @@ SERVER = sys.argv[1]
 
 # Server will delegate game_master identity to first client to connect.
 # If True, this client will initialize the start of the game
-game_master = False
-players = 0
 
 X_MAX = 1200
 Y_MAX = 500
 SCREEN_SIZE = [X_MAX, Y_MAX]
+
+
+class Game:
+    def __init__(self):
+        self.master = False
+        self.players = 0
 
 
 class EventManager:
@@ -78,8 +82,6 @@ class StateController:
 
     def run(self):
 
-        global players
-        global game_master
         while self.connect and self.start and self.keep_going:
             posting_time = time_it(self.event_manager.post(ConnectEvent()))
             time_remaining = TICK_TIME - posting_time # milliseconds
@@ -91,8 +93,8 @@ class StateController:
                     continue
             instruction, players = json.loads(msg)
             if instruction == 'MASTER':
-                game_master = True
-            players = int(players)
+                game.master = True
+            game.players = int(players)
             event = StartEvent()
             self.notify(event)
 
@@ -109,7 +111,7 @@ class StateController:
             if instruction == 'START':
                 self.notify(TickEvent())
             else:
-                players = int(players)
+                game.players = int(players)
 
         while self.keep_going:
             self.event_manager.post(TickEvent())
@@ -152,7 +154,7 @@ class KeyboardController:
 
         if isinstance(event, StartEvent):
 
-            if pressed[pygame.K_s] and game_master:
+            if pressed[pygame.K_s] and game.master:
                 start = json.dumps(['START'], separators=(',',':'))
                 s.sendto(start, (SERVER, PORT))
 
@@ -206,11 +208,11 @@ class View:
 
             self.draw_text('~*~snowball~*~', self.title, white, y=200)
 
-            if game_master:
+            if game.master:
                 self.draw_text("hit 's' to start game", self.msg, blue, y=400)
-                self.draw_text('snowballs formed: %d' % players, self.msg, blue, y=350)
+                self.draw_text('snowballs formed: %d' % game.players, self.msg, blue, y=350)
             else:
-                self.draw_text('snowballs formed: %d' % players, self.msg, blue, y=350)
+                self.draw_text('snowballs formed: %d' % game.players, self.msg, blue, y=350)
 
         if isinstance(event, TickEvent):
 
@@ -247,6 +249,8 @@ class View:
 
 
 pygame.init()
+
+game = Game()
 
 def main():
     event_manager = EventManager()
