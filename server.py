@@ -6,15 +6,13 @@ import random
 import socket
 import sys
 import threading
-import time
 import weakref
+
+from util import *
 
 #-------------#
 #  Constants  #
 #-------------#
-
-# Milliseconds per frame
-TICK_TIME = 31
 
 # Set listening IP
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -26,8 +24,6 @@ except socket.gaierror:
 s.close()
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-MAX = 65535
-PORT = 1060
 
 # Model Constants
 X_MAX = 1200
@@ -61,12 +57,12 @@ def sticky_sum(initial, shift):
     sticky sum."""
     if initial < 0:
         result = min(0, initial + shift)
-        return(result)
+        return result
     elif initial > 0:
         result = max(0, initial + shift)
-        return(result)
+        return result
     else: # initial == 0
-        return(0)
+        return 0
 
 def dampen(initial, dampenAmount):
     """Given a initial number and a dampening amount, return the dampened
@@ -163,7 +159,7 @@ class EventManager:
     def unregister_listener(self, listener):
         if listener in self.listeners.keys():
             del self.listeners[listener]
-    
+
     def post(self, event):
         """Post a new event broadcasted to listeners"""
         for listener in self.listeners.keys():
@@ -234,7 +230,7 @@ class PrintView:
         self.event_manager.register_listener(self)
 
     def notify(self, event):
-        
+
         if isinstance(event, ConnectEvent):
             pass
 
@@ -242,7 +238,7 @@ class PrintView:
             snowstorm = serialize(snowflakes, True) + serialize(snowballs, False)
             snowstorm = ['START', snowstorm]
             snowstorm = json.dumps(snowstorm, separators=(',',':'))
-            s.settimeout(300)
+            s.settimeout(10)
             for addr in clients:
                 s.sendto(snowstorm, addr)
 
@@ -265,7 +261,6 @@ class StateController:
         s.bind((IP, PORT))
         print 'Listening at', s.getsockname()
         global clients
-        global lt
         global snowflakes
         global snowballs
 
@@ -338,9 +333,9 @@ class StateController:
                     if client == addr:
                         clients[client] = [keys_pressed, clients[client][1]]
                 t = current_time()
-            abc = current_time()
+            #abc = current_time()
             #print 'tick event over in %d' % (abc - lt)
-                
+
     def notify(self, event):
         if isinstance(event, QuitEvent):
             self.keep_going = False
@@ -418,7 +413,7 @@ class Quadtree:
 
         if self.nw == self.ne == self.se == self.sw:
             region = self.objects
-        
+
         if self.nw:
             region += self.nw.regions()
         if self.ne:
@@ -452,8 +447,8 @@ class Snowflake(Entity):
     #    return([self.xPosition, self.yPosition])
 
     def top(self):
-        return(self.y - self.r) 
-    
+        return(self.y - self.r)
+
     def bottom(self):
         return(self.y + self.r)
 
@@ -486,7 +481,7 @@ class Snowflake(Entity):
         return(distance)
 
     def recolor(self, newColor):
-        # Make super colors later maybe
+        # TODO: Make super colors later maybe
         # maybe the snow will be RGB and add to each RGB value!
         self.color = newColor
 
@@ -553,11 +548,11 @@ class Snowstorm:
         self.xMin, self.xMax = xMin, xMax
         self.yMin, self.yMax = yMin, yMax
 
-    def attributes(self, typeOfSnow, playerRadius=None, 
-                  playerColors=None):
+    def attributes(self, typeOfSnow, playerRadius=None,
+                   playerColors=None):
         """Return list of Snowflakes with given attributes."""
-        attrs = []
 
+        attrs = []
         if typeOfSnow == 'Snowflakes':
             for i in range(self.intensity):
                 x = random.randrange(self.xMin, self.xMax)
@@ -604,15 +599,6 @@ class NatureEffect:
     def effect_on(self, obj):
         return(dampen(wind.speed, obj.r // 2))
 
-# Define some colors
-black    = (   0,   0,   0)
-white    = ( 255, 255, 255)
-green    = (   0, 255,   0)
-red      = ( 255,   0,   0)
-blue     = (  65, 105, 225)
-yellow   = ( 255, 255,   0)
-orchid   = ( 218, 112, 214)
-
 # Wind
 wind = NatureEffect(0,0)
 gravity = NatureEffect(0,-3)
@@ -620,22 +606,16 @@ gravity = NatureEffect(0,-3)
 snowflakes = ''
 snowballs = ''
 
-lt = current_time()
-
 #-----------------#
 #  Main function  #
 #-----------------#
 
 def main():
-    # Instantiate event_manager
     event_manager = EventManager()
-
-    # Instantiate view and controllers, as well as registering them
-    # as listeners in event_manager
     model = Model(event_manager)
     view = PrintView(event_manager)
     state = StateController(event_manager) 
-
     state.run()
 
-main()
+if __name__ == '__main__':
+    main()

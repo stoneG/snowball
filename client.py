@@ -6,32 +6,25 @@ import pygame
 import pygame.gfxdraw
 import socket
 import sys
-import time
 import weakref
 
+from util import *
 #import server
 
 # socket family is AF_INET, the Internet family of protocols
 # SOCK_DGRAM refers to using UDP (and sending 'datagrams' aka packets)
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-
-MAX = 65535
-PORT = 1060
 SERVER = sys.argv[1]
-TICK_TIME = 31
 
 # Server will delegate game_master identity to first client to connect.
 # If True, this client will initialize the start of the game
 game_master = False
 players = 0
 
-SCREEN_SIZE = [1200, 500]
-
-class Event:
-    """Superclass for any event that needs to be sent to the EventManager."""
-    def __init__(self):
-        self.name = "Event"
+X_MAX = 1200
+Y_MAX = 500
+SCREEN_SIZE = [X_MAX, Y_MAX]
 
 
 class EventManager:
@@ -85,20 +78,16 @@ class StateController:
 
     def run(self):
 
-        global lt
         global players
         global game_master
         while self.connect and self.start and self.keep_going:
-            lt = current_time()
-            event = ConnectEvent()
-            self.event_manager.post(event)
-            t = current_time()
-            if TICK_TIME - t + lt > 0:
-                s.settimeout((TICK_TIME - t + lt)*0.001)
+            posting_time = time_it(self.event_manager.post(ConnectEvent()))
+            time_remaining = TICK_TIME - posting_time # milliseconds
+            if time_remaining > 0:
+                s.settimeout((time_remaining)*0.001) # seconds
                 try:
                     msg, _ = s.recvfrom(MAX)
                 except socket.timeout:
-                    t = current_time()
                     continue
             instruction, players = json.loads(msg)
             if instruction == 'MASTER':
@@ -108,27 +97,22 @@ class StateController:
             self.notify(event)
 
         while self.start and self.keep_going:
-            lt = current_time()
-            event = StartEvent()
-            self.event_manager.post(event)
-            t = current_time()
-            if TICK_TIME - t + lt > 0:
-                s.settimeout((TICK_TIME - t + lt)*0.001)
+            posting_time = time_it(self.event_manager.post(StartEvent()))
+            time_remaining = TICK_TIME - posting_time # milliseconds
+            if time_remaining > 0:
+                s.settimeout((time_remaining)*0.001) # seconds
                 try:
                     msg, _ = s.recvfrom(MAX)
                 except socket.timeout:
-                    t = current_time()
                     continue
             instruction, players = json.loads(msg)
             if instruction == 'START':
-                event = TickEvent()
-                self.notify(event)
+                self.notify(TickEvent())
             else:
                 players = int(players)
 
         while self.keep_going:
-            event = TickEvent()
-            self.event_manager.post(event)
+            self.event_manager.post(TickEvent())
 
     def notify(self, event):
         if isinstance(event, QuitEvent):
@@ -146,52 +130,35 @@ class KeyboardController:
 
     def notify(self, event):
 
-        quit = None
+        if isinstance(event, QuitEvent):
+            return
 
-        # Quitting
         for game_event in pygame.event.get():
             if game_event.type == pygame.QUIT:
-                quit = QuitEvent()
+                self.event_manager.post(QuitEvent())
+                return
 
         pressed = pygame.key.get_pressed()
 
+        if pressed[pygame.K_ESCAPE]:
+            self.event_manager.post(QuitEvent())
+            return
+
         if isinstance(event, ConnectEvent):
 
-            if pressed[pygame.K_ESCAPE]:
-                quit = QuitEvent()
-
-            if quit:
-                self.event_manager.post(quit)
-                return
-
             if pressed[pygame.K_SPACE]:
-                keys_pressed = json.dumps(['SPACE'], separators=(',',':'))
-                s.sendto(keys_pressed, (SERVER, PORT))
+                connect = json.dumps(['SPACE'], separators=(',',':'))
+                s.sendto(connect, (SERVER, PORT))
 
         if isinstance(event, StartEvent):
-
-            if pressed[pygame.K_ESCAPE]:
-                quit = QuitEvent()
-
-            if quit:
-                self.event_manager.post(quit)
-                return
 
             if pressed[pygame.K_s] and game_master:
                 start = json.dumps(['START'], separators=(',',':'))
                 s.sendto(start, (SERVER, PORT))
 
-
         if isinstance(event, TickEvent):
 
             keys_pressed = []
-
-            if pressed[pygame.K_ESCAPE]:
-                quit = QuitEvent()
-
-            if quit:
-                self.event_manager.post(quit)
-                return
 
             if not event.game_over:
                 # Keyboard Game Controls
@@ -215,7 +182,6 @@ class KeyboardController:
                     s.sendto(keys_pressed, (SERVER, PORT))
 
 
-
 class View:
     def __init__(self, eventManager):
         self.event_manager = eventManager
@@ -227,53 +193,24 @@ class View:
         self.title = pygame.font.Font(None, 100)
         self.msg = pygame.font.Font(None, 40)
 
-
     def notify(self, event):
 
         self.window.fill(black)
 
         if isinstance(event, ConnectEvent):
 
-            title = self.title.render('~*~snowball~*~', True, white)
-            title_rectangle = title.get_rect()
-            title_rectangle.centerx = self.window.get_rect().centerx
-            title_rectangle.centery = 200
-            self.window.blit(title, title_rectangle)
+            self.draw_text('~*~snowball~*~', self.title, white, y=200)
+            self.draw_text('hit SPACE to connect to server', self.msg, blue, y=400)
 
-            text = self.msg.render('hit SPACE to connect to server', True, blue)
-            text_rectangle = text.get_rect()
-            text_rectangle.centerx = self.window.get_rect().centerx
-            text_rectangle.centery = 400
-            self.window.blit(text, text_rectangle)
+        elif isinstance(event, StartEvent):
 
-            pygame.display.flip()
-
-        if isinstance(event, StartEvent):
-
-            title = self.title.render('~*~snowball~*~', True, white)
-            title_rectangle = title.get_rect()
-            title_rectangle.centerx = self.window.get_rect().centerx
-            title_rectangle.centery = 200
-            self.window.blit(title, title_rectangle)
+            self.draw_text('~*~snowball~*~', self.title, white, y=200)
 
             if game_master:
-                text2 = self.msg.render("hit 's' to start game", True, blue)
-                text2_rectangle = text2.get_rect()
-                text2_rectangle.centerx = self.window.get_rect().centerx
-                text2_rectangle.centery = 400
-                self.window.blit(text2, text2_rectangle)
-
-                text = self.msg.render('snowballs formed: %d' % players, True, white)
-
+                self.draw_text("hit 's' to start game", self.msg, blue, y=400)
+                self.draw_text('snowballs formed: %d' % players, self.msg, blue, y=350)
             else:
-                text = self.msg.render('snowballs formed: %d' % players, True, blue)
-
-            text_rectangle = text.get_rect()
-            text_rectangle.centerx = self.window.get_rect().centerx
-            text_rectangle.centery = 350
-            self.window.blit(text, text_rectangle)
-
-            pygame.display.flip()
+                self.draw_text('snowballs formed: %d' % players, self.msg, blue, y=350)
 
         if isinstance(event, TickEvent):
 
@@ -294,44 +231,30 @@ class View:
                     pygame.gfxdraw.filled_circle(self.window, x, y, r, c)
 
             if event.game_over:
-                text = self.font.render('You Lose', True, red)
-                text_rectangle = text.get_rect()
-                text_rectangle.centerx = self.window.get_rect().centerx
-                text_rectangle.centery = self.window.get_rect().centery
-                self.window.blit(text, text_rectangle)
+                self.draw_text('You Lose', self.title, red)
 
-            pygame.display.flip()
+        pygame.display.flip()
 
         if isinstance(event, QuitEvent):
             pass
 
-def current_time():
-    return(int(round(time.time() * 100)))
+    def draw_text(self, text, textType, color, x=X_MAX/2, y=Y_MAX/2):
+        """Given text to draw, draw text on self.window."""
+        text = textType.render(text, True, color)
+        text_rectangle = text.get_rect()
+        text_rectangle.centerx, text_rectangle.centery = x, y
+        self.window.blit(text, text_rectangle)
 
-
-# Define some colors
-black    = (   0,   0,   0)
-white    = ( 255, 255, 255)
-green    = (   0, 255,   0)
-red      = ( 255,   0,   0)
-blue     = (  65, 105, 225)
-yellow   = ( 255, 255,   0)
-orchid   = ( 218, 112, 214)
 
 pygame.init()
 
-# Used to manage how fast the screen updates
-clock = pygame.time.Clock()
-
 def main():
-    global lt
     event_manager = EventManager()
     keyboard = KeyboardController(event_manager)
     state = StateController(event_manager)
     view = View(event_manager)
 
-    lt = current_time()
     state.run()
 
-main()
-
+if __name__ == '__main__':
+    main()
