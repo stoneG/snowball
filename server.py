@@ -44,8 +44,6 @@ IMMUNE_TIME = 2000
 X_DAMPEN = 100
 Y_DAMPEN = 100
 
-# key:value -> (Client IP, Client Port):[[keys pressed], color]
-clients = {}
 
 
 #--------------------#
@@ -141,10 +139,12 @@ def serialize(snowstorm, allWhite=False):
 #  Classes  #
 #-----------#
 
-class Event:
-    """Superclass for any event that needs to be sent to the EventManager."""
+class Game:
     def __init__(self):
-        self.name = "Event"
+        self.snowballs = []
+        self.snowflakes = []
+        self.clients = {}
+
 
 class EventManager:
     """Coordinates communication between Model, View, and Controller."""
@@ -181,7 +181,10 @@ class QuitEvent:
 
 
 class ResetEvent:
-    pass
+    def __init__(self):
+        game.clients = {}
+        game.snowballs = []
+        game.snowflakes = []
 
 
 class Model:
@@ -192,15 +195,17 @@ class Model:
     def notify(self, event):
         if isinstance(event, TickEvent):
 
-            if not snowballs:
-                self.event_manager(ResetEvent())
+            if not game.snowballs:
+                event = ResetEvent()
+                self.event_manager.post(event)
                 return
 
             # Choose wind
             wind.change_speed(random.choice(X_WIND), 0)
 
             # Snowstorm collision logic (only runs in the area of the screen+20px)
-            quadtree = Quadtree(snowflakes+snowballs, bounds=(-20,X_MAX+20,Y_MAX+20,-20))
+            initial_bound = (-20, X_MAX + 20, Y_MAX + 20, -20)
+            quadtree = Quadtree(game.snowflakes+game.snowballs, bounds=initial_bound)
             for region in quadtree.regions():
                 for i in range(len(region)-1):
                     sf = region.pop()
@@ -208,21 +213,21 @@ class Model:
                         collision(sf, other_sf)
 
             # Snowball logic and movement
-            for (index, sb) in enumerate(snowballs):
+            for (index, sb) in enumerate(game.snowballs):
                 sb.calculate_speed()
                 if sb.out_of_bounds(0, X_MAX, 0, Y_MAX):
-                    del snowballs[index]
+                    del game.snowballs[index]
                     self.event_manager.post(TickEvent(game_over=True))
                     return
                 # Currently not applying nature effects to snowballs
                 # sb.nature_move(wind.xSpeed, gravity.ySpeed)
-                for client in clients.values():
+                for client in game.clients.values():
                     if client[1] == sb.color:
                         sb.control(client[0])
                         break
 
             # Snowflake movement and reset logic
-            for sf in snowflakes:
+            for sf in game.snowflakes:
                 if sf.y < SNOW_Y_MIN or sf.x < SNOW_X_MIN or sf.x > SNOW_X_MAX:
                     reset(sf)
                 sf.move(0, -1)
@@ -242,18 +247,18 @@ class PrintView:
             pass
 
         if isinstance(event, TickEvent):
-            snowstorm = serialize(snowflakes, True) + serialize(snowballs, False)
+            snowstorm = serialize(game.snowflakes, True) + serialize(game.snowballs, False)
             snowstorm = ['START', snowstorm]
             snowstorm = json.dumps(snowstorm, separators=(',',':'))
             s.settimeout(10)
-            for addr in clients:
+            for addr in game.clients:
                 s.sendto(snowstorm, addr)
 
             if event.game_over:
                 print 'Game Over'
 
         if isinstance(event, ResetEvent):
-            print 'Reset Event'
+            print "Reset Event"
 
 class StateController:
     def __init__(self, eventManager):
@@ -265,20 +270,16 @@ class StateController:
 
     def run(self):
 
-        s.bind((IP, PORT))
-        print 'Listening at', s.getsockname()
-        global clients
-        global snowflakes
-        global snowballs
-
         player_cols = [green, blue, red, yellow, orchid, white]
 
-        while self.connect and self.keep_going:
+        s.settimeout(1000)
+
+        while self.connect:
             msg, addr = s.recvfrom(MAX)
             msg = json.loads(msg)
             if not self.master:
                 if msg[0] == 'SPACE':
-                    clients[addr] = [[], player_cols[0]]
+                    game.clients[addr] = [[], player_cols[0]]
                     msg = ['MASTER', 1]
                     msg = json.dumps(msg, separators=(',',':'))
                     s.sendto(msg, addr)
@@ -287,45 +288,47 @@ class StateController:
                     continue
             if addr == self.master:
                 if msg[0] == 'START':
-                    msg = ['START', len(clients.keys())]
+                    msg = ['START', len(game.clients)]
                     msg = json.dumps(msg, separators=(',',':'))
-                    for add in clients:
+                    for add in game.clients:
                         s.sendto(msg, add)
                     event = TickEvent()
                     self.notify(event)
                     print 'starting'
                     break
                 else:
-                    msg = ['MASTER', len(clients.keys())]
+                    msg = ['MASTER', len(game.clients)]
                     msg = json.dumps(msg, separators=(',',':'))
                     s.sendto(msg, addr)
                     print 'send to master'
                     continue
-            if addr not in clients:
-                clients[addr] = [[], player_cols[len(clients.keys())]]
+            if addr not in game.clients:
+                game.clients[addr] = [[], player_cols[len(game.clients)]]
             #msg = str(len(clients.keys()))
-            msg = ['a', len(clients.keys())]
+            msg = ['a', len(game.clients)]
             msg = json.dumps(msg, separators=(',',':'))
-            for add in clients:
+            for add in game.clients:
                 s.sendto(msg, add)
 
-        players = len(clients.keys())
+        players = len(game.clients)
 
         # Snowballs
         balls = Snowstorm(players, 0, X_MAX, 0, Y_MAX)
-        snowballs = balls.attributes('Snowballs', MIN_SNOWBALL_R, player_cols[:players])
+        game.snowballs = balls.attributes('Snowballs', MIN_SNOWBALL_R, player_cols[:players])
 
         # Snowflakes
         flakes = Snowstorm(500, SNOW_X_MIN, SNOW_X_MAX, SNOW_Y_MIN, SNOW_Y_MAX)
-        snowflakes = flakes.attributes('Snowflakes')
+        game.snowflakes = flakes.attributes('Snowflakes')
+
+        self.keep_going = True
 
         while self.keep_going:
             # TickEvent starts events for the general game
             lt = current_time()
             event = TickEvent()
             self.event_manager.post(event)
-            for client in clients.keys():
-                clients[client] = [[], clients[client][1]]
+            for client in game.clients.keys():
+                game.clients[client] = [[], game.clients[client][1]]
             t = current_time()
             #print 'receiving keys starting %d' % (t - lt)
             while (TICK_TIME - t + lt) > 0:
@@ -335,23 +338,23 @@ class StateController:
                 except socket.timeout:
                     break
                 keys_pressed = json.loads(keys_pressed)
-                for client in clients.keys():
+                for client in game.clients.keys():
                     if client == addr:
-                        clients[client] = [keys_pressed, clients[client][1]]
+                        game.clients[client] = [keys_pressed, game.clients[client][1]]
                 t = current_time()
             #abc = current_time()
             #print 'tick event over in %d' % (abc - lt)
 
-        addr = json.dumps('Reset')
-        for addr in clients:
+        msg = json.dumps(['Reset'])
+        for addr in game.clients:
             s.sendto(msg, addr)
-        self.event_manager.post(ResetEvent())
+        self.run()
 
     def notify(self, event):
         if isinstance(event, ResetEvent):
             self.master = None
             self.connect = True
-            self.keep_going = True
+            self.keep_going = False
         elif isinstance(event, QuitEvent):
             self.keep_going = False
         elif isinstance(event, TickEvent):
@@ -618,18 +621,19 @@ class NatureEffect:
 wind = NatureEffect(0,0)
 gravity = NatureEffect(0,-3)
 
-snowflakes = ''
-snowballs = ''
-
 #-----------------#
 #  Main function  #
 #-----------------#
+
+game = Game()
 
 def main():
     event_manager = EventManager()
     model = Model(event_manager)
     view = PrintView(event_manager)
     state = StateController(event_manager) 
+    s.bind((IP, PORT))
+    print 'Listening at', s.getsockname()
     state.run()
 
 if __name__ == '__main__':
