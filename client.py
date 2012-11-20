@@ -257,6 +257,7 @@ class View:
 
         self.title = pygame.font.Font(None, 100)
         self.msg = pygame.font.Font(None, 40)
+        self.bigtitle = pygame.font.Font(None, 200)
 
     def notify(self, event):
 
@@ -265,17 +266,17 @@ class View:
         if isinstance(event, ConnectEvent):
 
             self.draw_text('~*~snowball~*~', self.title, white, y=200)
-            self.draw_text('hit SPACE to connect to server', self.msg, blue, y=400)
+            self.draw_text('hit SPACE to connect to server', self.msg, grey, y=400)
 
         elif isinstance(event, StartEvent):
 
             self.draw_text('~*~snowball~*~', self.title, white, y=200)
 
             if game.master:
-                self.draw_text("hit 's' to start game", self.msg, blue, y=400)
-                self.draw_text('snowballs formed: %d' % game.players, self.msg, blue, y=350)
+                self.draw_text("hit 's' to start game", self.msg, grey, y=400)
+                self.draw_text('snowballs formed: %d' % game.players, self.msg, grey, y=350)
             else:
-                self.draw_text('snowballs formed: %d' % game.players, self.msg, blue, y=350)
+                self.draw_text('snowballs formed: %d' % game.players, self.msg, grey, y=350)
 
         if isinstance(event, TickEvent):
 
@@ -320,8 +321,8 @@ class View:
                 pygame.gfxdraw.aacircle(self.window, x, y, r, c)
                 pygame.gfxdraw.filled_circle(self.window, x, y, r, c)
 
-            self.draw_text('WINNER!', self.title, game.winner)
-            self.draw_text('reset in %d' % game.timer, self.msg, blue, y=400)
+            self.draw_text('WINNER!', self.bigtitle, game.winner)
+            self.draw_text('reset in %d' % game.timer, self.msg, grey, y=400)
 
         pygame.display.flip()
 
