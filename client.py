@@ -29,6 +29,12 @@ class Game:
     def __init__(self):
         self.master = False
         self.players = 0
+        self.timeouts = 0
+        self.timer = 4.0
+        self.reset = False
+        self.snowstorm = []
+        self.playing = True
+        self.winner = white
 
 
 class EventManager:
@@ -67,9 +73,17 @@ class TickEvent:
         self.game_over = game_over
 
 
+class ResetEvent:
+    def __init__(self, reset=False):
+        game.master = False
+        game.players = 0
+        game.timeouts = 0
+        self.reset = reset
+
+
 class QuitEvent:
     def __init__(self):
-        pass
+        game.playing = False
 
 
 class StateController:
@@ -114,15 +128,64 @@ class StateController:
                 game.players = int(players)
 
         while self.keep_going:
-            self.event_manager.post(TickEvent())
+            if game.reset:
+                event = ResetEvent()
+            else:
+                event = TickEvent()
+            posting_time = time_it(self.event_manager.post(event))
+            if game.reset:
+                game.timer -= 0.03
+                time.sleep((30-posting_time)*0.001)
+            if game.timer < 1.1:
+                event = ResetEvent(reset=True)
+                self.event_manager.post(event)
+
+        self.keep_going = True
+        game.reset = False
+        game.timer = 4.0
 
     def notify(self, event):
         if isinstance(event, QuitEvent):
             self.keep_going = False
         if isinstance(event, TickEvent):
             self.start = False
+        if isinstance(event, ResetEvent):
+            self.connect, self.start = True, True
+            if event.reset:
+                self.keep_going = False
         if isinstance(event, StartEvent):
             self.connect = False
+
+
+class ConnectionController:
+# NOTE currently not used
+    def __init__(self):
+        self.event_manager = eventManager
+        self.event_manager.register_listener(self)
+        self.state = 'asdf'
+
+    def notify(self, event):
+        if isinstance(event, TickEvent):
+            self.connect = False
+
+    def receive(time_remaining):
+        if time_remaining > 0:
+            s.settimeout((time_remaining)*0.001) # seconds
+            try:
+                msg, _ = s.recvfrom(MAX)
+                game.instructions, data = json.loads(msg)
+            except socket.timeout:
+                return False
+        if instruction == 'START' and self.connect:
+                self.notify(TickEvent())
+                return True
+        elif instruction == 'MASTER' and self.connect:
+            game.master = True
+        game.players = int(data)
+        return True
+
+    def send():
+        pass
 
 
 class KeyboardController:
@@ -216,16 +279,30 @@ class View:
 
         if isinstance(event, TickEvent):
 
+            if game.timeouts > 161:
+                self.event_manager.post(ResetEvent())
+                return
+
             s.settimeout((TICK_TIME)*0.001)
             try:
                 snowstorm, address = s.recvfrom(MAX)
-                _, snowstorm = json.loads(snowstorm)
             except socket.timeout:
-                #print 'Server not responding'
+                game.timeouts += 1
                 return
+            instructions, snowstorm = json.loads(snowstorm)
+            game.timeouts = 0
 
-            if len(snowstorm):
-                for snow in snowstorm:
+            if instructions[0] == 'RESET':
+                print 'posting reset'
+                game.reset = True
+                game.winner = instructions[1]
+                self.event_manager.post(ResetEvent())
+                return
+            elif len(snowstorm):
+                game.snowstorm = snowstorm
+
+            if len(game.snowstorm):
+                for snow in game.snowstorm:
                     x, y, r, c = snow
                     if not c:
                         c = white
@@ -234,6 +311,17 @@ class View:
 
             if event.game_over:
                 self.draw_text('You Lose', self.title, red)
+
+        if isinstance(event, ResetEvent):
+            for snow in game.snowstorm:
+                x, y, r, c = snow
+                if not c:
+                    c = white
+                pygame.gfxdraw.aacircle(self.window, x, y, r, c)
+                pygame.gfxdraw.filled_circle(self.window, x, y, r, c)
+
+            self.draw_text('WINNER!', self.title, game.winner)
+            self.draw_text('reset in %d' % game.timer, self.msg, blue, y=400)
 
         pygame.display.flip()
 
@@ -258,7 +346,8 @@ def main():
     state = StateController(event_manager)
     view = View(event_manager)
 
-    state.run()
+    while game.playing:
+        state.run()
 
 if __name__ == '__main__':
     main()

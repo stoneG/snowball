@@ -168,7 +168,8 @@ class EventManager:
 
 
 class ConnectEvent:
-    pass
+     def __init__(self):
+         pass
 
 
 class TickEvent:
@@ -182,10 +183,7 @@ class QuitEvent:
 
 class ResetEvent:
     def __init__(self):
-        game.clients = {}
-        game.snowballs = []
-        game.snowflakes = []
-
+        pass
 
 class Model:
     def __init__(self, eventManager):
@@ -195,7 +193,7 @@ class Model:
     def notify(self, event):
         if isinstance(event, TickEvent):
 
-            if not game.snowballs:
+            if len(game.snowballs) == 1:
                 event = ResetEvent()
                 self.event_manager.post(event)
                 return
@@ -344,9 +342,12 @@ class StateController:
             #abc = current_time()
             #print 'tick event over in %d' % (abc - lt)
 
-        msg = json.dumps(['Reset'])
+        msg = json.dumps([['RESET', game.snowballs[0].color], []])
         for addr in game.clients:
             s.sendto(msg, addr)
+        game.clients = {}
+        game.snowballs = []
+        game.snowflakes = []
 
     def notify(self, event):
         if isinstance(event, ResetEvent):
