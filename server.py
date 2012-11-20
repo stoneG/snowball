@@ -255,10 +255,10 @@ class PrintView:
                 s.sendto(snowstorm, addr)
 
             if event.game_over:
-                print 'Game Over'
+                print '   Game Over'
 
         if isinstance(event, ResetEvent):
-            print "Reset Event"
+            print "    Reset Event"
 
 class StateController:
     def __init__(self, eventManager):
@@ -284,7 +284,7 @@ class StateController:
                     msg = json.dumps(msg, separators=(',',':'))
                     s.sendto(msg, addr)
                     self.master = addr
-                    print 'assigned master'
+                    print ' assigned master'
                     continue
             if addr == self.master:
                 if msg[0] == 'START':
@@ -294,16 +294,17 @@ class StateController:
                         s.sendto(msg, add)
                     event = TickEvent()
                     self.notify(event)
-                    print 'starting'
+                    print '  starting'
                     break
                 else:
                     msg = ['MASTER', len(game.clients)]
                     msg = json.dumps(msg, separators=(',',':'))
                     s.sendto(msg, addr)
-                    print 'send to master'
                     continue
             if addr not in game.clients:
-                game.clients[addr] = [[], player_cols[len(game.clients)]]
+                if msg[0] == 'SPACE':
+                    game.clients[addr] = [[], player_cols[len(game.clients)]]
+                    print ' another client connected'
             #msg = str(len(clients.keys()))
             msg = ['a', len(game.clients)]
             msg = json.dumps(msg, separators=(',',':'))
@@ -319,8 +320,6 @@ class StateController:
         # Snowflakes
         flakes = Snowstorm(500, SNOW_X_MIN, SNOW_X_MAX, SNOW_Y_MIN, SNOW_Y_MAX)
         game.snowflakes = flakes.attributes('Snowflakes')
-
-        self.keep_going = True
 
         while self.keep_going:
             # TickEvent starts events for the general game
@@ -348,7 +347,6 @@ class StateController:
         msg = json.dumps(['Reset'])
         for addr in game.clients:
             s.sendto(msg, addr)
-        self.run()
 
     def notify(self, event):
         if isinstance(event, ResetEvent):
@@ -628,13 +626,14 @@ gravity = NatureEffect(0,-3)
 game = Game()
 
 def main():
-    event_manager = EventManager()
-    model = Model(event_manager)
-    view = PrintView(event_manager)
-    state = StateController(event_manager) 
     s.bind((IP, PORT))
-    print 'Listening at', s.getsockname()
-    state.run()
+    while True:
+        event_manager = EventManager()
+        model = Model(event_manager)
+        view = PrintView(event_manager)
+        state = StateController(event_manager) 
+        print 'Listening at', s.getsockname()
+        state.run()
 
 if __name__ == '__main__':
     main()
