@@ -3,26 +3,18 @@ The Game
 Snowball is a "dog eat dog" game. Players maneuver a snowball across the sky,
 dodging larger snowballs, in an effort to be the last snowball standing.
 
-Preview
--------
-(video coming soon)  
-![alt
-text](https://raw.github.com/stoneG/snowball/master/images/TWO-1.png "Two players on
-Ubuntu 12.04")  
-![alt
-text](https://raw.github.com/stoneG/snowball/master/images/TWO-2.png "Growing larger...")  
-![alt
-text](https://raw.github.com/stoneG/snowball/master/images/TWO-3.png "Looks like green
-didn't make it")  
-![alt
-text](https://raw.github.com/stoneG/snowball/master/images/THREE-1.png "Three players on
-OSX 10.8")  
+Photos
+------
 ![alt
 text](https://raw.github.com/stoneG/snowball/master/images/THREE-2.png "Stoplight
 formation")  
 ![alt
 text](https://raw.github.com/stoneG/snowball/master/images/THREE-3.png "What's gonna
 happen?")
+
+Gameplay
+--------
+Here's the [video demo](http://www.youtube.com/watch?v=5ysXMWCLRPw)
 
 Release
 -------
